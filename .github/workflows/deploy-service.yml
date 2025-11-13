@@ -27,8 +27,8 @@ jobs:
       
       - name: Build
         run: |
-          docker build -t {{ env.SERVICE_NAME }}:${{ github.sha }} .
-          docker save {{ env.SERVICE_NAME }}:${{ github.sha }} > {{ env.SERVICE_NAME }}.tar
+          docker build -t ${{ env.SERVICE_NAME }}:${{ github.sha }} .
+          docker save ${{ env.SERVICE_NAME }}:${{ github.sha }} > ${{ env.SERVICE_NAME }}.tar
           ls -la
           
       - name: Transfer
