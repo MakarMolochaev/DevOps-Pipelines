@@ -1,0 +1,65 @@
+name: Deploy Serivce Template
+
+on:
+  workflow_call:
+    inputs:
+      service_name:
+        description: 'Name of the service to deploy'
+        required: true
+        type: string
+    secrets:
+      HOST:
+        required: true
+      DEPLOYER_USER:
+        required: true
+      DEPLOYER_SSH_KEY:
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SERVICE_NAME: ${{ inputs.service_name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Build
+        run: |
+          docker build -t {{ env.SERVICE_NAME }}:${{ github.sha }} .
+          docker save {{ env.SERVICE_NAME }}:${{ github.sha }} > {{ env.SERVICE_NAME }}.tar
+          ls -la
+          
+      - name: Transfer
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.DEPLOYER_USER }}
+          key: ${{ secrets.DEPLOYER_SSH_KEY }}
+          source: "${{ env.SERVICE_NAME }}.tar"
+          target: "/tmp"
+
+      - name: Deploy
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.DEPLOYER_USER }}
+          key: ${{ secrets.DEPLOYER_SSH_KEY }}
+          script: |
+            docker load < /tmp/${{ env.SERVICE_NAME }}.tar
+
+            cd /home/deployer/Stige
+            docker-compose stop ${{ env.SERVICE_NAME }}
+            docker-compose rm -f ${{ env.SERVICE_NAME }}
+
+            docker rmi ${{ env.SERVICE_NAME }}:latest 2>/dev/null || true
+            
+            docker tag ${{ env.SERVICE_NAME }}:${{ github.sha }} ${{ env.SERVICE_NAME }}:latest
+            
+            docker-compose up -d --no-deps ${{ env.SERVICE_NAME }}
+
+            docker rmi ${{ env.SERVICE_NAME }}:${{ github.sha }}
+
+            rm /tmp/${{ env.SERVICE_NAME }}.tar
+            docker image prune -f
